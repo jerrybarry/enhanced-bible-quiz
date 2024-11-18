@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
@@ -99,22 +99,22 @@ export default function EnhancedBibleQuiz() {
     }
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = useCallback(() => {
     const correctAnswer = quizData[currentQuestion].correctAnswer
     if (selectedAnswer === `${correctAnswer.book} ${correctAnswer.chapter}:${correctAnswer.verse}`) {
-      setScore(score + 1)
+      setScore(prevScore => prevScore + 1)
     }
     setIsAnswered(true)
-  }
+  }, [quizData, currentQuestion, selectedAnswer])
 
   useEffect(() => {
     if (timeLeft > 0 && !isAnswered && currentScreen === "quiz") {
-      const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000)
+      const timer = setTimeout(() => setTimeLeft(prevTime => prevTime - 1), 1000)
       return () => clearTimeout(timer)
     } else if (timeLeft === 0 && !isAnswered && currentScreen === "quiz") {
       handleSubmit()
     }
-  }, [timeLeft, isAnswered, currentScreen, handleSubmit, quizData, currentQuestion, selectedAnswer, score])
+  }, [timeLeft, isAnswered, currentScreen, handleSubmit])
 
   const handleAnswerSelect = (answer: string) => {
     setSelectedAnswer(answer)
@@ -273,6 +273,7 @@ export default function EnhancedBibleQuiz() {
       setErrorMessage('Failed to login. Please try again.')
     }
   }
+  
 
   return (
     <div className={`min-h-screen flex flex-col transition-colors duration-300 font-montserrat ${

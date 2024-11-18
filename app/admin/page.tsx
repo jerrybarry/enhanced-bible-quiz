@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Home, User, BookOpen, LogOut, Settings, Plus, Trash2, Edit } from 'lucide-react'
+import { Home, User, BookOpen, LogOut, Settings, Plus, Trash2, Edit, Users, BookOpenCheck, UsersIcon } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,7 +24,7 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { db, auth } from '@/lib/firebase'
-import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore'
+import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, query, where } from 'firebase/firestore'
 import { signInWithEmailAndPassword, signOut, User as FirebaseUser } from 'firebase/auth'
 
 interface QuizQuestion {
@@ -45,6 +45,7 @@ interface User {
 export default function AdminPanel() {
   const [questions, setQuestions] = useState<QuizQuestion[]>([])
   const [users, setUsers] = useState<User[]>([])
+  const [activeUsers, setActiveUsers] = useState<number>(0)
   const [activeTab, setActiveTab] = useState('dashboard')
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null)
   const [editingQuestion, setEditingQuestion] = useState<QuizQuestion | null>(null)
@@ -68,13 +69,14 @@ export default function AdminPanel() {
       if (user) {
         fetchQuestions()
         fetchUsers()
+        fetchActiveUsers()
       }
     })
 
     return () => unsubscribe()
   }, [])
 
-  const fetchQuestions = async () => {
+  const fetchQuestions = useCallback(async () => {
     try {
       const querySnapshot = await getDocs(collection(db, 'questions'))
       const fetchedQuestions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as QuizQuestion))
@@ -82,9 +84,9 @@ export default function AdminPanel() {
     } catch (error) {
       console.error('Error fetching questions:', error)
     }
-  }
+  }, [])
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       const querySnapshot = await getDocs(collection(db, 'users'))
       const fetchedUsers = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User))
@@ -92,7 +94,18 @@ export default function AdminPanel() {
     } catch (error) {
       console.error('Error fetching users:', error)
     }
-  }
+  }, [])
+
+  const fetchActiveUsers = useCallback(async () => {
+    try {
+      // This is a placeholder. You'll need to implement your own logic to determine active users
+      const activeUsersQuery = query(collection(db, 'users'), where('lastActive', '>', new Date(Date.now() - 24*60*60*1000)))
+      const querySnapshot = await getDocs(activeUsersQuery)
+      setActiveUsers(querySnapshot.size)
+    } catch (error) {
+      console.error('Error fetching active users:', error)
+    }
+  }, [])
 
   const handleLogin = async () => {
     try {
@@ -202,7 +215,7 @@ export default function AdminPanel() {
 
   return (
     <SidebarProvider>
-      <div className="flex h-screen bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900 dark:to-pink-900">
+      <div className="flex min-h-screen w-full bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900 dark:to-pink-900">
         <Sidebar className="hidden md:block">
           <SidebarHeader>
             <h2 className="text-xl font-bold text-purple-800 dark:text-purple-200 p-4">Admin Panel</h2>
@@ -231,11 +244,11 @@ export default function AdminPanel() {
           </SidebarContent>
         </Sidebar>
 
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <header className="flex justify-between items-center p-4 bg-white dark:bg-gray-800 shadow">
+        <div className="flex flex-1 flex-col w-full">
+          <header className="flex justify-between items-center p-4 bg-white dark:bg-gray-800 shadow w-full">
             <SidebarTrigger className="md:hidden" />
             <div className="flex items-center">
-              <span className="mr-2">{currentUser?.email}</span> {/* Updated line to handle potential null value */}
+              <span className="mr-2">{currentUser?.email}</span>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="h-8 w-8 rounded-full">
@@ -256,16 +269,46 @@ export default function AdminPanel() {
             </div>
           </header>
 
-          <main className="flex-1 overflow-x-hidden overflow-y-auto p-6">
+          <main className="flex-1 overflow-x-hidden overflow-y-auto p-6 w-full">
             {activeTab === 'dashboard' && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Welcome to the Admin Dashboard</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p>Select an option from the sidebar to manage questions or view users.</p>
-                </CardContent>
-              </Card>
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Welcome, {currentUser?.email} 👋</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Total Questions</CardTitle>
+                          <BookOpenCheck className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{questions.length}</div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+                          <UsersIcon className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{users.length}</div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Active Players</CardTitle>
+                          <Users className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{activeUsers}</div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             )}
 
             {activeTab === 'questions' && (
@@ -302,8 +345,9 @@ export default function AdminPanel() {
                             value={option.chapter || ''}
                             onChange={(e) => {
                               const newOptions = editingQuestion ? [...editingQuestion.options] : [...newQuestion.options];
-                              newOptions[index].chapter = parseInt(e.target.value, 10); //Added radix for parseInt
-                              editingQuestion ? setEditingQuestion({...editingQuestion, options: newOptions}) : setNewQuestion({ ...newQuestion, options: newOptions });
+                              newOptions[index].chapter = parseInt(e.target.value, 10);
+                              editingQuestion ? setEditingQuestion({...editingQuestion, options: newOptions}) :
+                                setNewQuestion({ ...newQuestion, options: newOptions });
                             }}
                           />
                           <Input
@@ -312,8 +356,10 @@ export default function AdminPanel() {
                             value={option.verse || ''}
                             onChange={(e) => {
                               const newOptions = editingQuestion ? [...editingQuestion.options] : [...newQuestion.options];
-                              newOptions[index].verse = parseInt(e.target.value, 10); //Added radix for parseInt
-                              editingQuestion ? setEditingQuestion({...editingQuestion, options: newOptions}) : setNewQuestion({ ...newQuestion, options: newOptions });
+                              newOptions[index].verse = parseInt(e.target.value, 10);
+                              editingQuestion ?
+                                setEditingQuestion({...editingQuestion, options: newOptions}) :
+                                setNewQuestion({ ...newQuestion, options: newOptions});
                             }}
                           />
                         </div>
@@ -325,19 +371,28 @@ export default function AdminPanel() {
                             id="correctAnswer"
                             placeholder="Book"
                             value={editingQuestion ? editingQuestion.correctAnswer.book : newQuestion.correctAnswer.book}
-                            onChange={(e) => editingQuestion ? setEditingQuestion({...editingQuestion, correctAnswer: {...editingQuestion.correctAnswer, book: e.target.value}}) : setNewQuestion({ ...newQuestion, correctAnswer: { ...newQuestion.correctAnswer, book: e.target.value } })}
+                            onChange={(e) => editingQuestion ?
+                              setEditingQuestion({...editingQuestion, correctAnswer: {...editingQuestion.correctAnswer, book: e.target.value}}) :
+                              setNewQuestion({ ...newQuestion, correctAnswer: { ...newQuestion.correctAnswer, book: e.target.value } })
+                            }
                           />
                           <Input
                             type="number"
                             placeholder="Chapter"
                             value={editingQuestion ? editingQuestion.correctAnswer.chapter || '' : newQuestion.correctAnswer.chapter || ''}
-                            onChange={(e) => editingQuestion ? setEditingQuestion({...editingQuestion, correctAnswer: {...editingQuestion.correctAnswer, chapter: parseInt(e.target.value, 10)}}) : setNewQuestion({ ...newQuestion, correctAnswer: { ...newQuestion.correctAnswer, chapter: parseInt(e.target.value, 10) } })}
+                            onChange={(e) => editingQuestion ?
+                              setEditingQuestion({...editingQuestion, correctAnswer: {...editingQuestion.correctAnswer, chapter: parseInt(e.target.value, 10)}}) :
+                              setNewQuestion({ ...newQuestion, correctAnswer: { ...newQuestion.correctAnswer, chapter: parseInt(e.target.value, 10) } })
+                            }
                           />
                           <Input
                             type="number"
                             placeholder="Verse"
                             value={editingQuestion ? editingQuestion.correctAnswer.verse || '' : newQuestion.correctAnswer.verse || ''}
-                            onChange={(e) => editingQuestion ? setEditingQuestion({...editingQuestion, correctAnswer: {...editingQuestion.correctAnswer, verse: parseInt(e.target.value, 10)}}) : setNewQuestion({ ...newQuestion, correctAnswer: { ...newQuestion.correctAnswer, verse: parseInt(e.target.value, 10) } })}
+                            onChange={(e) => editingQuestion ?
+                              setEditingQuestion({...editingQuestion, correctAnswer: {...editingQuestion.correctAnswer, verse: parseInt(e.target.value, 10)}}) :
+                              setNewQuestion({ ...newQuestion, correctAnswer: { ...newQuestion.correctAnswer, verse: parseInt(e.target.value, 10) } })
+                            }
                           />
                         </div>
                       </div>
@@ -346,7 +401,10 @@ export default function AdminPanel() {
                         <Textarea
                           id="explanation"
                           value={editingQuestion ? editingQuestion.explanation : newQuestion.explanation}
-                          onChange={(e) => editingQuestion ? setEditingQuestion({...editingQuestion, explanation: e.target.value}) : setNewQuestion({ ...newQuestion, explanation: e.target.value })}
+                          onChange={(e) => editingQuestion ?
+                            setEditingQuestion({...editingQuestion, explanation: e.target.value}) :
+                            setNewQuestion({ ...newQuestion, explanation: e.target.value })
+                          }
                           className="mt-1"
                         />
                       </div>
