@@ -46,6 +46,7 @@ interface User {
 
 export default function EnhancedBibleQuiz() {
   const [quizData, setQuizData] = useState<QuizQuestion[]>([])
+  const [shuffledQuizData, setShuffledQuizData] = useState<QuizQuestion[]>([])
   const [currentQuestion, setCurrentQuestion] = useState(0)
   const [selectedAnswer, setSelectedAnswer] = useState("")
   const [score, setScore] = useState(0)
@@ -64,12 +65,20 @@ export default function EnhancedBibleQuiz() {
   const [isEditingProfile, setIsEditingProfile] = useState(false)
   const [newName, setNewName] = useState("")
   const [newPassword, setNewPassword] = useState("")
+  const [isClient, setIsClient] = useState(false)
 
   useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  useEffect(() => {
+    if (!isClient) return
+
     const fetchData = async () => {
       const questionsSnapshot = await getDocs(collection(db, 'questions'))
       const fetchedQuestions = questionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as QuizQuestion))
       setQuizData(fetchedQuestions)
+      shuffleQuestions(fetchedQuestions)
 
       const leaderboardQuery = query(collection(db, 'users'), orderBy('score', 'desc'), limit(10))
       const leaderboardSnapshot = await getDocs(leaderboardQuery)
@@ -87,7 +96,16 @@ export default function EnhancedBibleQuiz() {
     })
 
     return () => unsubscribe()
-  }, [])
+  }, [isClient])
+
+  const shuffleQuestions = (questions: QuizQuestion[]) => {
+    const shuffled = [...questions]
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+    }
+    setShuffledQuizData(shuffled)
+  }
 
   const fetchUserData = async (userId: string) => {
     const userDoc = await getDoc(doc(db, 'users', userId))
@@ -100,32 +118,33 @@ export default function EnhancedBibleQuiz() {
   }
 
   const handleSubmit = useCallback(() => {
-    const correctAnswer = quizData[currentQuestion].correctAnswer
+    const correctAnswer = shuffledQuizData[currentQuestion].correctAnswer
     if (selectedAnswer === `${correctAnswer.book} ${correctAnswer.chapter}:${correctAnswer.verse}`) {
       setScore(prevScore => prevScore + 1)
     }
     setIsAnswered(true)
-  }, [quizData, currentQuestion, selectedAnswer])
+  }, [shuffledQuizData, currentQuestion, selectedAnswer])
 
   useEffect(() => {
+    if (!isClient) return
+
     if (timeLeft > 0 && !isAnswered && currentScreen === "quiz") {
       const timer = setTimeout(() => setTimeLeft(prevTime => prevTime - 1), 1000)
       return () => clearTimeout(timer)
     } else if (timeLeft === 0 && !isAnswered && currentScreen === "quiz") {
       handleSubmit()
     }
-  }, [timeLeft, isAnswered, currentScreen, handleSubmit])
+  }, [timeLeft, isAnswered, currentScreen, handleSubmit, isClient])
 
   const handleAnswerSelect = (answer: string) => {
     setSelectedAnswer(answer)
   }
 
-
   const handleNextQuestion = () => {
     setSelectedAnswer("")
     setIsAnswered(false)
     setTimeLeft(60)
-    if (currentQuestion < quizData.length - 1) {
+    if (currentQuestion < shuffledQuizData.length - 1) {
       setCurrentQuestion(currentQuestion + 1)
     } else {
       setShowResult(true)
@@ -134,6 +153,7 @@ export default function EnhancedBibleQuiz() {
   }
 
   const resetQuiz = () => {
+    shuffleQuestions(quizData)
     setCurrentQuestion(0)
     setSelectedAnswer("")
     setScore(0)
@@ -161,14 +181,14 @@ export default function EnhancedBibleQuiz() {
   }
 
   const shareResults = () => {
-    if (navigator.share) {
+    if (typeof navigator !== 'undefined' && navigator.share) {
       navigator.share({
         title: 'Bible Quiz Results',
-        text: `I scored ${score} out of ${quizData.length} in the Bible Quiz! Can you beat my score?`,
+        text: `I scored ${score} out of ${shuffledQuizData.length} in the Bible Quiz! Can you beat my score?`,
         url: window.location.href,
       })
     } else {
-      alert(`I scored ${score} out of ${quizData.length} in the Bible Quiz! Can you beat my score?`)
+      alert(`I scored ${score} out of ${shuffledQuizData.length} in the Bible Quiz! Can you beat my score?`)
     }
   }
 
@@ -273,7 +293,10 @@ export default function EnhancedBibleQuiz() {
       setErrorMessage('Failed to login. Please try again.')
     }
   }
-  
+
+  if (!isClient) {
+    return null
+  }
 
   return (
     <div className={`min-h-screen flex flex-col transition-colors duration-300 font-montserrat ${
@@ -341,7 +364,7 @@ export default function EnhancedBibleQuiz() {
                       <div className="space-y-4">
                         <p className="text-purple-700 dark:text-purple-300">Welcome back, {playerName}!</p>
                         <Button 
-                          onClick={() => setCurrentScreen("quiz")} 
+                          onClick={resetQuiz} 
                           className="w-full bg-purple-600 hover:bg-purple-700 text-white"
                         >
                           Start Quiz
@@ -349,7 +372,7 @@ export default function EnhancedBibleQuiz() {
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        <form onSubmit={handleLogin} className="space-y-4">
+                <form onSubmit={handleLogin} className="space-y-4">
                           <div className="relative">
                             <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                             <Input 
@@ -538,23 +561,23 @@ export default function EnhancedBibleQuiz() {
                 </Card>
               )}
 
-              {currentScreen === "quiz" && quizData.length > 0 && (
+              {currentScreen === "quiz" && shuffledQuizData.length > 0 && (
                 <Card className="bg-white dark:bg-gray-800 shadow-lg">
                   <CardContent className="p-6">
                     {!showResult ? (
                       <>
                         <div className="flex justify-between items-center mb-4">
                           <h2 className="text-xl font-semibold text-purple-800 dark:text-purple-200">
-                            Question {currentQuestion + 1} of {quizData.length}
+                            Question {currentQuestion + 1} of {shuffledQuizData.length}
                           </h2>
                           <div className="flex items-center space-x-2 text-pink-600 dark:text-pink-400">
                             <Clock className="w-5 h-5" />
                             <span>{timeLeft}s</span>
                           </div>
                         </div>
-                        <p className="mb-6 text-lg text-purple-700 dark:text-purple-300">{quizData[currentQuestion].passage}</p>
+                        <p className="mb-6 text-lg text-purple-700 dark:text-purple-300">{shuffledQuizData[currentQuestion].passage}</p>
                         <RadioGroup value={selectedAnswer} onValueChange={handleAnswerSelect} className="space-y-2">
-                          {quizData[currentQuestion].options.map((option, index) => (
+                          {shuffledQuizData[currentQuestion].options.map((option, index) => (
                             <div key={index} className="flex items-center space-x-2">
                               <RadioGroupItem
                                 value={`${option.book} ${option.chapter}:${option.verse}`}
@@ -570,16 +593,16 @@ export default function EnhancedBibleQuiz() {
                         </RadioGroup>
                         {isAnswered && (
                           <div className="mt-4">
-                            <p className={`font-semibold ${selectedAnswer === `${quizData[currentQuestion].correctAnswer.book} ${quizData[currentQuestion].correctAnswer.chapter}:${quizData[currentQuestion].correctAnswer.verse}` ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                              {selectedAnswer === `${quizData[currentQuestion].correctAnswer.book} ${quizData[currentQuestion].correctAnswer.chapter}:${quizData[currentQuestion].correctAnswer.verse}` ? 'Correct!' : `Incorrect. The correct answer is ${quizData[currentQuestion].correctAnswer.book} ${quizData[currentQuestion].correctAnswer.chapter}:${quizData[currentQuestion].correctAnswer.verse}`}
+                            <p className={`font-semibold ${selectedAnswer === `${shuffledQuizData[currentQuestion].correctAnswer.book} ${shuffledQuizData[currentQuestion].correctAnswer.chapter}:${shuffledQuizData[currentQuestion].correctAnswer.verse}` ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                              {selectedAnswer === `${shuffledQuizData[currentQuestion].correctAnswer.book} ${shuffledQuizData[currentQuestion].correctAnswer.chapter}:${shuffledQuizData[currentQuestion].correctAnswer.verse}` ? 'Correct!' : `Incorrect. The correct answer is ${shuffledQuizData[currentQuestion].correctAnswer.book} ${shuffledQuizData[currentQuestion].correctAnswer.chapter}:${shuffledQuizData[currentQuestion].correctAnswer.verse}`}
                             </p>
-                            <p className="mt-2 text-purple-700 dark:text-purple-300">{quizData[currentQuestion].explanation}</p>
+                            <p className="mt-2 text-purple-700 dark:text-purple-300">{shuffledQuizData[currentQuestion].explanation}</p>
                           </div>
                         )}
                         <div className="mt-6 flex justify-center">
                           {isAnswered ? (
                             <Button onClick={handleNextQuestion} className="bg-purple-600 text-white hover:bg-purple-700">
-                              {currentQuestion < quizData.length - 1 ? 'Next Question' : 'Finish Quiz'}
+                              {currentQuestion < shuffledQuizData.length - 1 ? 'Next Question' : 'Finish Quiz'}
                             </Button>
                           ) : (
                             <Button onClick={handleSubmit} disabled={!selectedAnswer} className="bg-purple-600 text-white hover:bg-purple-700">
@@ -591,7 +614,7 @@ export default function EnhancedBibleQuiz() {
                     ) : (
                       <div className="text-center">
                         <h2 className="text-2xl font-bold mb-4 text-purple-800 dark:text-purple-200">Quiz Completed!</h2>
-                        <p className="text-xl mb-4 text-purple-700 dark:text-purple-300">Your score: {score} out of {quizData.length}</p>
+                        <p className="text-xl mb-4 text-purple-700 dark:text-purple-300">Your score: {score} out of {shuffledQuizData.length}</p>
                         <div className="flex justify-center gap-4">
                           <Button onClick={shareResults} className="bg-pink-600 text-white hover:bg-pink-700">
                             <Share2 className="w-4 h-4 mr-2" />
@@ -656,7 +679,7 @@ export default function EnhancedBibleQuiz() {
 
               <Button
                 variant="ghost"
-                onClick={() => setCurrentScreen("quiz")}
+                onClick={resetQuiz}
                 className={`flex flex-col items-center gap-1 h-auto px-6 ${
                   currentScreen === "quiz" 
                     ? "text-purple-600 dark:text-purple-400" 
