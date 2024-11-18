@@ -22,6 +22,7 @@ import {
   OAuthProvider,
   signInWithPopup
 } from 'firebase/auth'
+import { FirebaseError } from 'firebase/app'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -234,8 +235,16 @@ export default function EnhancedBibleQuiz() {
       })
       setCurrentScreen("quiz")
     } catch (error) {
-      console.error('Error during registration:', error)
-      setErrorMessage('Registration failed. This email might already be in use.')
+      if (error instanceof FirebaseError) {
+        if (error.code === 'auth/email-already-in-use') {
+          setErrorMessage('This email is already in use. Please try a different email or log in.')
+        } else {
+          setErrorMessage(`Registration failed: ${error.message}`)
+        }
+      } else {
+        console.error('Error during registration:', error)
+        setErrorMessage('An unexpected error occurred during registration. Please try again.')
+      }
     }
   }
 
@@ -382,7 +391,7 @@ export default function EnhancedBibleQuiz() {
                       </div>
                     ) : (
                       <div className="space-y-4">
-                <form onSubmit={handleLogin} className="space-y-4">
+                        <form onSubmit={handleLogin} className="space-y-4">
                           <div className="relative">
                             <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                             <Input 
@@ -668,54 +677,22 @@ export default function EnhancedBibleQuiz() {
         </div>
       </main>
 
-      {currentUser && (
-        <footer className={`fixed bottom-0 left-0 right-0 ${
-          isDarkMode ? 'bg-gray-800' : 'bg-white'
-        } border-t border-purple-200 dark:border-purple-800`}>
-          <nav className="max-w-2xl mx-auto px-6 py-4">
-            <div className="flex justify-around items-center">
-              <Button
-                variant="ghost"
-                onClick={() => setCurrentScreen("welcome")}
-                className={`flex flex-col items-center gap-1 h-auto px-6 ${
-                  currentScreen === "welcome" 
-                    ? "text-purple-600 dark:text-purple-400" 
-                    : "text-gray-600 dark:text-gray-400"
-                }`}
-              >
-                <Home className="h-7 w-7" />
-                <span className="text-xs font-medium">Home</span>
-              </Button>
-
-              <Button
-                variant="ghost"
-                onClick={resetQuiz}
-                className={`flex flex-col items-center gap-1 h-auto px-6 ${
-                  currentScreen === "quiz" 
-                    ? "text-purple-600 dark:text-purple-400" 
-                    : "text-gray-600 dark:text-gray-400"
-                }`}
-              >
-                <BookOpen className="h-7 w-7" />
-                <span className="text-xs font-medium">Quiz</span>
-              </Button>
-
-              <Button
-                variant="ghost"
-                onClick={() => setCurrentScreen("leaderboard")}
-                className={`flex flex-col items-center gap-1 h-auto px-6 ${
-                  currentScreen === "leaderboard" 
-                    ? "text-purple-600 dark:text-purple-400" 
-                    : "text-gray-600 dark:text-gray-400"
-                }`}
-              >
-                <Trophy className="h-7 w-7" />
-                <span className="text-xs font-medium">Ranks</span>
-              </Button>
-            </div>
-          </nav>
-        </footer>
-      )}
+      <footer className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-purple-200 dark:border-purple-800 py-2">
+        <nav className="max-w-2xl mx-auto flex justify-around">
+          <Button variant="ghost" onClick={() => setCurrentScreen("welcome")} className="flex flex-col items-center">
+            <Home className="h-6 w-6" />
+            <span className="text-xs mt-1">Home</span>
+          </Button>
+          <Button variant="ghost" onClick={() => setCurrentScreen("quiz")} className="flex flex-col items-center">
+            <BookOpen className="h-6 w-6" />
+            <span className="text-xs mt-1">Quiz</span>
+          </Button>
+          <Button variant="ghost" onClick={() => setCurrentScreen("leaderboard")} className="flex flex-col items-center">
+            <Trophy className="h-6 w-6" />
+            <span className="text-xs mt-1">Leaderboard</span>
+          </Button>
+        </nav>
+      </footer>
     </div>
   )
 }
