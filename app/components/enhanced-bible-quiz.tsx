@@ -69,7 +69,17 @@ export default function EnhancedBibleQuiz() {
 
   useEffect(() => {
     setIsClient(true)
+    const storedDarkMode = localStorage.getItem('isDarkMode')
+    if (storedDarkMode !== null) {
+      setIsDarkMode(storedDarkMode === 'true')
+    }
   }, [])
+
+  useEffect(() => {
+    if (isClient) {
+      localStorage.setItem('isDarkMode', isDarkMode.toString())
+    }
+  }, [isDarkMode, isClient])
 
   useEffect(() => {
     if (!isClient) return
@@ -181,7 +191,7 @@ export default function EnhancedBibleQuiz() {
   }
 
   const shareResults = () => {
-    if (typeof navigator !== 'undefined' && navigator.share) {
+    if (isClient && navigator.share) {
       navigator.share({
         title: 'Bible Quiz Results',
         text: `I scored ${score} out of ${shuffledQuizData.length} in the Bible Quiz! Can you beat my score?`,

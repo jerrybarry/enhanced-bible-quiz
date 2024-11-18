@@ -6,13 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Home, User, BookOpen, LogOut, Settings, Plus, Trash2, Edit, Users, BookOpenCheck, UsersIcon } from 'lucide-react'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { Home, User, BookOpen, LogOut, Settings, Edit, Trash2 } from 'lucide-react'
 import {
   Sidebar,
   SidebarContent,
@@ -21,7 +15,6 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarProvider,
-  SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { db, auth } from '@/lib/firebase'
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, query, where } from 'firebase/firestore'
@@ -41,6 +34,32 @@ interface User {
   email: string;
   score: number;
 }
+
+interface SidebarMenuItemProps {
+  icon: React.ReactNode;
+  onClick: () => void;
+  children: React.ReactNode;
+}
+
+interface SidebarMenuButtonProps {
+  icon: React.ReactNode;
+  onClick: () => void;
+  children: React.ReactNode;
+}
+
+const TypedSidebarMenuItem: React.FC<SidebarMenuItemProps> = ({ icon, onClick, children }) => (
+  <SidebarMenuItem onClick={onClick}>
+    {icon}
+    {children}
+  </SidebarMenuItem>
+);
+
+const TypedSidebarMenuButton: React.FC<SidebarMenuButtonProps> = ({ icon, onClick, children }) => (
+  <SidebarMenuButton onClick={onClick}>
+    {icon}
+    {children}
+  </SidebarMenuButton>
+);
 
 export default function AdminPanel() {
   const [questions, setQuestions] = useState<QuizQuestion[]>([])
@@ -64,20 +83,6 @@ export default function AdminPanel() {
   const [password, setPassword] = useState('')
   const [isClient, setIsClient] = useState(false)
   const [jsonInput, setJsonInput] = useState('')
-
-  useEffect(() => {
-    setIsClient(true)
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      setCurrentUser(user)
-      if (user) {
-        fetchQuestions()
-        fetchUsers()
-        fetchActiveUsers()
-      }
-    })
-
-    return () => unsubscribe()
-  }, [])
 
   const fetchQuestions = useCallback(async () => {
     try {
@@ -108,6 +113,20 @@ export default function AdminPanel() {
       console.error('Error fetching active users:', error)
     }
   }, [])
+
+  useEffect(() => {
+    setIsClient(true)
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setCurrentUser(user)
+      if (user) {
+        fetchQuestions()
+        fetchUsers()
+        fetchActiveUsers()
+      }
+    })
+
+    return () => unsubscribe()
+  }, [fetchQuestions, fetchUsers, fetchActiveUsers])
 
   const handleLogin = async () => {
     try {
@@ -246,323 +265,268 @@ export default function AdminPanel() {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900 dark:to-pink-900">
-        <Sidebar className="hidden md:block">
+      <div className="flex h-screen">
+        <Sidebar>
           <SidebarHeader>
-            <h2 className="text-xl font-bold text-purple-800 dark:text-purple-200 p-4">Admin Panel</h2>
+            <h2 className="text-xl font-bold">Admin Panel</h2>
           </SidebarHeader>
           <SidebarContent>
             <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton onClick={() => setActiveTab('dashboard')} isActive={activeTab === 'dashboard'}>
-                  <Home className="w-4 h-4 mr-2" />
-                  Dashboard
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton onClick={() => setActiveTab('questions')} isActive={activeTab === 'questions'}>
-                  <BookOpen className="w-4 h-4 mr-2" />
-                  Questions
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton onClick={() => setActiveTab('users')} isActive={activeTab === 'users'}>
-                  <User className="w-4 h-4 mr-2" />
-                  Users
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              <TypedSidebarMenuItem icon={<Home />} onClick={() => setActiveTab('dashboard')}>Dashboard</TypedSidebarMenuItem>
+              <TypedSidebarMenuItem icon={<BookOpen />} onClick={() => setActiveTab('questions')}>Questions</TypedSidebarMenuItem>
+              <TypedSidebarMenuItem icon={<User />} onClick={() => setActiveTab('users')}>Users</TypedSidebarMenuItem>
+              <TypedSidebarMenuItem icon={<Settings />} onClick={() => setActiveTab('settings')}>Settings</TypedSidebarMenuItem>
             </SidebarMenu>
           </SidebarContent>
+          <TypedSidebarMenuButton icon={<LogOut />} onClick={handleLogout}>Logout</TypedSidebarMenuButton>
         </Sidebar>
-
-        <div className="flex flex-1 flex-col w-full">
-          <header className="flex justify-between items-center p-4 bg-white dark:bg-gray-800 shadow w-full">
+        <main className="flex-1 p-6 overflow-auto">
+          {activeTab === 'dashboard' && (
             <div>
-              <SidebarTrigger className="md:hidden" />
-            </div>
-            <div className="flex items-center">
-              <span className="mr-2">{currentUser?.email}</span>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="h-8 w-8 rounded-full">
-                    <User className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => setActiveTab('profile')}>
-                    <Settings className="mr-2 h-4 w-4" />
-                    <span>Profile Settings</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleLogout}>
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>Logout</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </header>
-
-          <main className="flex-1 overflow-x-hidden overflow-y-auto p-6 w-full">
-            {activeTab === 'dashboard' && (
-              <div className="space-y-6">
+              <h2 className="text-2xl font-bold mb-4">Dashboard</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Welcome, {currentUser?.email} 👋</CardTitle>
+                    <CardTitle>Total Questions</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                          <CardTitle className="text-sm font-medium">Total Questions</CardTitle>
-                          <BookOpenCheck className="h-4 w-4 text-muted-foreground" />
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{questions.length}</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                          <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-                          <UsersIcon className="h-4 w-4 text-muted-foreground" />
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{users.length}</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                          <CardTitle className="text-sm font-medium">Active Players</CardTitle>
-                          <Users className="h-4 w-4 text-muted-foreground" />
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{activeUsers}</div>
-                        </CardContent>
-                      </Card>
-                    </div>
+                    <p className="text-4xl font-bold">{questions.length}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Total Users</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-4xl font-bold">{users.length}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Active Users (24h)</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-4xl font-bold">{activeUsers}</p>
                   </CardContent>
                 </Card>
               </div>
-            )}
-
-            {activeTab === 'questions' && (
-              <div className="space-y-6">
-                <Card>
+            </div>
+          )}
+          {activeTab === 'questions' && (
+            <div>
+              <h2 className="text-2xl font-bold mb-4">Questions</h2>
+              <Button onClick={() => setEditingQuestion(null)} className="mb-4">Add New Question</Button>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Passage</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {questions.map((question) => (
+                    <TableRow key={question.id}>
+                      <TableCell>{question.passage}</TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="sm" onClick={() => setEditingQuestion(question)}><Edit className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleDeleteQuestion(question.id)}><Trash2 className="h-4 w-4" /></Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {(editingQuestion !== null || editingQuestion === null) && (
+                <Card className="mt-4">
                   <CardHeader>
                     <CardTitle>{editingQuestion ? 'Edit Question' : 'Add New Question'}</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <form onSubmit={(e) => { e.preventDefault(); editingQuestion ? handleEditQuestion() : handleAddQuestion(); }} className="space-y-4">
+                    <form onSubmit={(e) => {
+                      e.preventDefault();
+                      if (editingQuestion) {
+                        handleEditQuestion();
+                      } else {
+                        handleAddQuestion();
+                      }
+                    }} className="space-y-4">
                       <div>
-                        <label htmlFor="passage" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Passage</label>
+                        <label htmlFor="passage" className="block text-sm font-medium text-gray-700">Passage</label>
                         <Textarea
                           id="passage"
                           value={editingQuestion ? editingQuestion.passage : newQuestion.passage}
-                          onChange={(e) => editingQuestion ? setEditingQuestion({...editingQuestion, passage: e.target.value}) : setNewQuestion({ ...newQuestion, passage: e.target.value })}
-                          className="mt-1"
+                          onChange={(e) => {
+                            if (editingQuestion) {
+                              setEditingQuestion({ ...editingQuestion, passage: e.target.value });
+                            } else {
+                              setNewQuestion({ ...newQuestion, passage: e.target.value });
+                            }
+                          }}
+                          className="mt-1 block w-full"
+                          rows={3}
                         />
                       </div>
-                      {(editingQuestion ? editingQuestion.options : newQuestion.options).map((option, index) => (
-                        <div key={index} className="flex space-x-2">
-                          <Input
-                            placeholder="Book"
-                            value={option.book}
-                            onChange={(e) => {
-                              const newOptions = editingQuestion ? [...editingQuestion.options] : [...newQuestion.options];
-                              newOptions[index].book = e.target.value;
-                              editingQuestion ? setEditingQuestion({...editingQuestion, options: newOptions}) : setNewQuestion({ ...newQuestion, options: newOptions });
-                            }}
-                          />
-                          <Input
-                            type="number"
-                            placeholder="Chapter"
-                            value={option.chapter || ''}
-                            onChange={(e) => {
-                              const newOptions = editingQuestion ? [...editingQuestion.options] : [...newQuestion.options];
-                              newOptions[index].chapter = parseInt(e.target.value, 10);
-                              editingQuestion ? setEditingQuestion({...editingQuestion, options: newOptions}) :
-                                setNewQuestion({ ...newQuestion, options: newOptions });
-                            }}
-                          />
-                          <Input
-                            type="number"
-                            placeholder="Verse"
-                            value={option.verse || ''}
-                            onChange={(e) => {
-                              const newOptions = editingQuestion ? [...editingQuestion.options] : [...newQuestion.options];
-                              newOptions[index].verse = parseInt(e.target.value, 10);
-                              editingQuestion ?
-                                setEditingQuestion({...editingQuestion, options: newOptions}) :
-                                setNewQuestion({ ...newQuestion, options: newOptions});
-                            }}
-                          />
+                      {[0, 1, 2, 3].map((index) => (
+                        <div key={index} className="grid grid-cols-3 gap-4">
+                          <div>
+                            <label htmlFor={`option-${index}-book`} className="block text-sm font-medium text-gray-700">Option {index + 1} Book</label>
+                            <Input
+                              id={`option-${index}-book`}
+                              value={editingQuestion ? editingQuestion.options[index].book : newQuestion.options[index].book}
+                              onChange={(e) => {
+                                const updatedOptions = editingQuestion ? [...editingQuestion.options] : [...newQuestion.options];
+                                updatedOptions[index] = { ...updatedOptions[index], book: e.target.value };
+                                if (editingQuestion) {
+                                  setEditingQuestion({ ...editingQuestion, options: updatedOptions });
+                                } else {
+                                  setNewQuestion({ ...newQuestion, options: updatedOptions });
+                                }
+                              }}
+                              className="mt-1 block w-full"
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor={`option-${index}-chapter`} className="block text-sm font-medium text-gray-700">Chapter</label>
+                            <Input
+                              id={`option-${index}-chapter`}
+                              type="number"
+                              value={editingQuestion ? editingQuestion.options[index].chapter : newQuestion.options[index].chapter}
+                              onChange={(e) => {
+                                const updatedOptions = editingQuestion ? [...editingQuestion.options] : [...newQuestion.options];
+                                updatedOptions[index] = { ...updatedOptions[index], chapter: parseInt(e.target.value) };
+                                if (editingQuestion) {
+                                  setEditingQuestion({ ...editingQuestion, options: updatedOptions });
+                                } else {
+                                  setNewQuestion({ ...newQuestion, options: updatedOptions });
+                                }
+                              }}
+                              className="mt-1 block w-full"
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor={`option-${index}-verse`} className="block text-sm font-medium text-gray-700">Verse</label>
+                            <Input
+                              id={`option-${index}-verse`}
+                              type="number"
+                              value={editingQuestion ? editingQuestion.options[index].verse : newQuestion.options[index].verse}
+                              onChange={(e) => {
+                                const updatedOptions = editingQuestion ? [...editingQuestion.options] : [...newQuestion.options];
+                                updatedOptions[index] = { ...updatedOptions[index], verse: parseInt(e.target.value) };
+                                if (editingQuestion) {
+                                  setEditingQuestion({ ...editingQuestion, options: updatedOptions });
+                                } else {
+                                  setNewQuestion({ ...newQuestion, options: updatedOptions });
+                                }
+                              }}
+                              className="mt-1 block w-full"
+                            />
+                          </div>
                         </div>
                       ))}
                       <div>
-                        <label htmlFor="correctAnswer" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Correct Answer</label>
-                        <div className="flex space-x-2 mt-1">
-                          <Input
-                            id="correctAnswer"
-                            placeholder="Book"
-                            value={editingQuestion ? editingQuestion.correctAnswer.book : newQuestion.correctAnswer.book}
-                            onChange={(e) => editingQuestion ?
-                              setEditingQuestion({...editingQuestion, correctAnswer: {...editingQuestion.correctAnswer, book: e.target.value}}) :
-                              setNewQuestion({ ...newQuestion, correctAnswer: { ...newQuestion.correctAnswer, book: e.target.value } })
+                        <label htmlFor="correct-answer" className="block text-sm font-medium text-gray-700">Correct Answer</label>
+                        <select
+                          id="correct-answer"
+                          value={editingQuestion ? editingQuestion.options.findIndex(
+                            (option) =>
+                              option.book === editingQuestion.correctAnswer.book &&
+                              option.chapter === editingQuestion.correctAnswer.chapter &&
+                              option.verse === editingQuestion.correctAnswer.verse
+                          ) : newQuestion.options.findIndex(
+                            (option) =>
+                              option.book === newQuestion.correctAnswer.book &&
+                              option.chapter === newQuestion.correctAnswer.chapter &&
+                              option.verse === newQuestion.correctAnswer.verse
+                          )}
+                          onChange={(e) => {
+                            const selectedIndex = parseInt(e.target.value);
+                            const selectedOption = editingQuestion ? editingQuestion.options[selectedIndex] : newQuestion.options[selectedIndex];
+                            if (editingQuestion) {
+                              setEditingQuestion({ ...editingQuestion, correctAnswer: selectedOption });
+                            } else {
+                              setNewQuestion({ ...newQuestion, correctAnswer: selectedOption });
                             }
-                          />
-                          <Input
-                            type="number"
-                            placeholder="Chapter"
-                            value={editingQuestion ? editingQuestion.correctAnswer.chapter || '' : newQuestion.correctAnswer.chapter || ''}
-                            onChange={(e) => editingQuestion ?
-                              setEditingQuestion({...editingQuestion, correctAnswer: {...editingQuestion.correctAnswer, chapter: parseInt(e.target.value, 10)}}) :
-                              setNewQuestion({ ...newQuestion, correctAnswer: { ...newQuestion.correctAnswer, chapter: parseInt(e.target.value, 10) } })
-                            }
-                          />
-                          <Input
-                            type="number"
-                            placeholder="Verse"
-                            value={editingQuestion ? editingQuestion.correctAnswer.verse || '' : newQuestion.correctAnswer.verse || ''}
-                            onChange={(e) => editingQuestion ?
-                              setEditingQuestion({...editingQuestion, correctAnswer: {...editingQuestion.correctAnswer, verse: parseInt(e.target.value, 10)}}) :
-                              setNewQuestion({ ...newQuestion, correctAnswer: { ...newQuestion.correctAnswer, verse: parseInt(e.target.value, 10) } })
-                            }
-                          />
-                        </div>
+                          }}
+                          className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                        >
+                          {(editingQuestion ? editingQuestion.options : newQuestion.options).map((option, index) => (
+                            <option key={index} value={index}>
+                              {option.book} {option.chapter}:{option.verse}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <div>
-                        <label htmlFor="explanation" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Explanation</label>
+                        <label htmlFor="explanation" className="block text-sm font-medium text-gray-700">Explanation</label>
                         <Textarea
                           id="explanation"
                           value={editingQuestion ? editingQuestion.explanation : newQuestion.explanation}
-                          onChange={(e) => editingQuestion ?
-                            setEditingQuestion({...editingQuestion, explanation: e.target.value}) :
-                            setNewQuestion({ ...newQuestion, explanation: e.target.value })
-                          }
-                          className="mt-1"
+                          onChange={(e) => {
+                            if (editingQuestion) {
+                              setEditingQuestion({ ...editingQuestion, explanation: e.target.value });
+                            } else {
+                              setNewQuestion({ ...newQuestion, explanation: e.target.value });
+                            }
+                          }}
+                          className="mt-1 block w-full"
+                          rows={3}
                         />
                       </div>
-                      <Button type="submit">
-                        {editingQuestion ? (
-                          <>
-                            <Edit className="w-4 h-4 mr-2" />
-                            Update Question
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="w-4 h-4 mr-2" />
-                            Add Question
-                          </>
-                        )}
-                      </Button>
-                      {editingQuestion && (
-                        <Button type="button" variant="outline" onClick={() => setEditingQuestion(null)}>
-                          Cancel Edit
-                        </Button>
-                      )}
+                      <Button type="submit">{editingQuestion ? 'Update Question' : 'Add Question'}</Button>
                     </form>
                   </CardContent>
                 </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Add Questions from JSON</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <form onSubmit={(e) => { e.preventDefault(); handleAddQuestionsFromJson(); }} className="space-y-4">
-                      <div>
-                        <label htmlFor="jsonInput" className="block text-sm font-medium text-gray-700 dark:text-gray-300">JSON Input</label>
-                        <Textarea
-                          id="jsonInput"
-                          value={jsonInput}
-                          onChange={(e) => setJsonInput(e.target.value)}
-                          className="mt-1"
-                          placeholder='[{"passage": "...", "options": [...], "correctAnswer": {...}, "explanation": "..."}]'
-                          rows={10}
-                        />
-                      </div>
-                      <Button type="submit">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Add Questions from JSON
-                      </Button>
-                    </form>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Manage Questions</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Passage</TableHead>
-                          <TableHead>Correct Answer</TableHead>
-                          <TableHead>Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {questions.map((question) => (
-                          <TableRow key={question.id}>
-                            <TableCell>{question.passage.substring(0, 50)}...</TableCell>
-                            <TableCell>{`${question.correctAnswer.book} ${question.correctAnswer.chapter}:${question.correctAnswer.verse}`}</TableCell>
-                            <TableCell>
-                              <Button variant="ghost" size="sm" onClick={() => setEditingQuestion(question)} className="mr-2">
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                              <Button variant="destructive" size="sm" onClick={() => handleDeleteQuestion(question.id)}>
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {activeTab === 'users' && (
-              <Card>
+              )}
+              <Card className="mt-4">
                 <CardHeader>
-                  <CardTitle>User List</CardTitle>
+                  <CardTitle>Add Questions from JSON</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Score</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {users.map((user) => (
-                        <TableRow key={user.id}>
-                          <TableCell>{user.name}</TableCell>
-                          <TableCell>{user.email}</TableCell>
-                          <TableCell>{user.score}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    handleAddQuestionsFromJson();
+                  }} className="space-y-4">
+                    <Textarea
+                      value={jsonInput}
+                      onChange={(e) => setJsonInput(e.target.value)}
+                      placeholder="Paste your JSON here"
+                      rows={10}
+                    />
+                    <Button type="submit">Add Questions</Button>
+                  </form>
                 </CardContent>
               </Card>
-            )}
-
-            {activeTab === 'profile' && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Profile Settings</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p>Add form fields here to update user profile information. (To be implemented)</p>
-                </CardContent>
-              </Card>
-            )}
-          </main>
-        </div>
+            </div>
+          )}
+          {activeTab === 'users' && (
+            <div>
+              <h2 className="text-2xl font-bold mb-4">Users</h2>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Score</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {users.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell>{user.name}</TableCell>
+                      <TableCell>{user.email}</TableCell>
+                      <TableCell>{user.score}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+          {activeTab === 'settings' && (
+            <div>
+              <h2 className="text-2xl font-bold mb-4">Settings</h2>
+              <p>Add settings options here...</p>
+            </div>
+          )}
+        </main>
       </div>
     </SidebarProvider>
   )
