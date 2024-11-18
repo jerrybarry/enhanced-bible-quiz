@@ -62,8 +62,11 @@ export default function AdminPanel() {
   })
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [isClient, setIsClient] = useState(false)
+  const [jsonInput, setJsonInput] = useState('')
 
   useEffect(() => {
+    setIsClient(true)
     const unsubscribe = auth.onAuthStateChanged((user) => {
       setCurrentUser(user)
       if (user) {
@@ -98,7 +101,6 @@ export default function AdminPanel() {
 
   const fetchActiveUsers = useCallback(async () => {
     try {
-      // This is a placeholder. You'll need to implement your own logic to determine active users
       const activeUsersQuery = query(collection(db, 'users'), where('lastActive', '>', new Date(Date.now() - 24*60*60*1000)))
       const querySnapshot = await getDocs(activeUsersQuery)
       setActiveUsers(querySnapshot.size)
@@ -182,6 +184,35 @@ export default function AdminPanel() {
     }
   }
 
+  const handleAddQuestionsFromJson = async () => {
+    if (!currentUser) {
+      alert('You must be logged in to add questions')
+      return
+    }
+    try {
+      const parsedQuestions = JSON.parse(jsonInput)
+      if (!Array.isArray(parsedQuestions)) {
+        throw new Error('Input must be an array of questions')
+      }
+
+      const addedQuestions = await Promise.all(parsedQuestions.map(async (question) => {
+        const docRef = await addDoc(collection(db, 'questions'), question)
+        return { ...question, id: docRef.id }
+      }))
+
+      setQuestions([...questions, ...addedQuestions])
+      setJsonInput('')
+      alert('Questions added successfully!')
+    } catch (error) {
+      console.error('Error adding questions from JSON:', error)
+      alert('Failed to add questions. Please check your JSON format.')
+    }
+  }
+
+  if (!isClient) {
+    return null // or a loading spinner
+  }
+
   if (!currentUser) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900 dark:to-pink-900">
@@ -246,7 +277,9 @@ export default function AdminPanel() {
 
         <div className="flex flex-1 flex-col w-full">
           <header className="flex justify-between items-center p-4 bg-white dark:bg-gray-800 shadow w-full">
-            <SidebarTrigger className="md:hidden" />
+            <div>
+              <SidebarTrigger className="md:hidden" />
+            </div>
             <div className="flex items-center">
               <span className="mr-2">{currentUser?.email}</span>
               <DropdownMenu>
@@ -426,6 +459,31 @@ export default function AdminPanel() {
                           Cancel Edit
                         </Button>
                       )}
+                    </form>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Add Questions from JSON</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <form onSubmit={(e) => { e.preventDefault(); handleAddQuestionsFromJson(); }} className="space-y-4">
+                      <div>
+                        <label htmlFor="jsonInput" className="block text-sm font-medium text-gray-700 dark:text-gray-300">JSON Input</label>
+                        <Textarea
+                          id="jsonInput"
+                          value={jsonInput}
+                          onChange={(e) => setJsonInput(e.target.value)}
+                          className="mt-1"
+                          placeholder='[{"passage": "...", "options": [...], "correctAnswer": {...}, "explanation": "..."}]'
+                          rows={10}
+                        />
+                      </div>
+                      <Button type="submit">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Questions from JSON
+                      </Button>
                     </form>
                   </CardContent>
                 </Card>
