@@ -11,11 +11,11 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 }
 
-// Initialize Firebase only if it hasn't been initialized already
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig)
+// Initialize Firebase only if it hasn't been initialized already and we're on the client side
+const app = typeof window !== 'undefined' && (getApps().length ? getApp() : initializeApp(firebaseConfig))
 
 // Initialize Firebase services
-const auth = getAuth(app)
-const db = getFirestore(app)
+const auth = app ? getAuth(app) : null
+const db = app ? getFirestore(app) : null
 
 export { app, auth, db }
