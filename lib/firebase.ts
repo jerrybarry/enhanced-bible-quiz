@@ -1,6 +1,6 @@
-import { initializeApp } from 'firebase/app'
-import { getFirestore } from 'firebase/firestore'
+import { initializeApp, getApps, getApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
+import { getFirestore } from 'firebase/firestore'
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -11,9 +11,11 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 }
 
-const app = initializeApp(firebaseConfig)
-export const db = getFirestore(app)
-export const auth = getAuth(app)
+// Initialize Firebase only if it hasn't been initialized already
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig)
 
-// Add this line to ensure the file is treated as a module
-export {}
+// Initialize Firebase services
+const auth = getAuth(app)
+const db = getFirestore(app)
+
+export { app, auth, db }
