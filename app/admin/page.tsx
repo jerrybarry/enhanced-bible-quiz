@@ -17,7 +17,7 @@ import {
   SidebarProvider,
 } from '@/components/ui/sidebar'
 import { db, auth } from '@/lib/firebase'
-import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, query, where } from 'firebase/firestore'
+import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, query, where, Firestore } from 'firebase/firestore'
 import { signInWithEmailAndPassword, signOut, User as FirebaseUser } from 'firebase/auth'
 
 interface QuizQuestion {
@@ -85,6 +85,10 @@ export default function AdminPanel() {
   const [jsonInput, setJsonInput] = useState('')
 
   const fetchQuestions = useCallback(async () => {
+    if (!db) {
+      console.error('Firestore is not initialized')
+      return
+    }
     try {
       const querySnapshot = await getDocs(collection(db, 'questions'))
       const fetchedQuestions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as QuizQuestion))
@@ -95,6 +99,10 @@ export default function AdminPanel() {
   }, [])
 
   const fetchUsers = useCallback(async () => {
+    if (!db) {
+      console.error('Firestore is not initialized')
+      return
+    }
     try {
       const querySnapshot = await getDocs(collection(db, 'users'))
       const fetchedUsers = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User))
@@ -105,6 +113,10 @@ export default function AdminPanel() {
   }, [])
 
   const fetchActiveUsers = useCallback(async () => {
+    if (!db) {
+      console.error('Firestore is not initialized')
+      return
+    }
     try {
       const activeUsersQuery = query(collection(db, 'users'), where('lastActive', '>', new Date(Date.now() - 24*60*60*1000)))
       const querySnapshot = await getDocs(activeUsersQuery)
@@ -147,7 +159,7 @@ export default function AdminPanel() {
   }
 
   const handleAddQuestion = async () => {
-    if (!currentUser) {
+    if (!currentUser || !db) {
       alert('You must be logged in to add questions')
       return
     }
@@ -173,7 +185,7 @@ export default function AdminPanel() {
   }
 
   const handleEditQuestion = async () => {
-    if (!currentUser || !editingQuestion) {
+    if (!currentUser || !editingQuestion || !db) {
       alert('You must be logged in to edit questions')
       return
     }
@@ -189,7 +201,7 @@ export default function AdminPanel() {
   }
 
   const handleDeleteQuestion = async (id: string) => {
-    if (!currentUser) {
+    if (!currentUser || !db) {
       alert('You must be logged in to delete questions')
       return
     }
@@ -204,7 +216,7 @@ export default function AdminPanel() {
   }
 
   const handleAddQuestionsFromJson = async () => {
-    if (!currentUser) {
+    if (!currentUser || !db) {
       alert('You must be logged in to add questions')
       return
     }
@@ -229,7 +241,7 @@ export default function AdminPanel() {
   }
 
   if (!isClient) {
-    return null // or a loading spinner
+    return null
   }
 
   if (!currentUser) {
