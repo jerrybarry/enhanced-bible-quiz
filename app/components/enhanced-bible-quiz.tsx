@@ -8,27 +8,9 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { motion, AnimatePresence } from 'framer-motion'
-import { Share2, Clock, Sun, Moon, Home, BookOpen, Trophy, User, LogOut, Mail, Lock, ChromeIcon as Google, Apple } from 'lucide-react'
-import { db, auth } from '@/lib/firebase'
-import { collection, getDocs, query, orderBy, limit, updateDoc, doc, getDoc, setDoc } from 'firebase/firestore'
-import { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut, 
-  sendPasswordResetEmail, 
-  updatePassword, 
-  User as FirebaseUser,
-  GoogleAuthProvider,
-  OAuthProvider,
-  signInWithPopup
-} from 'firebase/auth'
-import { FirebaseError } from 'firebase/app'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { Share2, Clock, Sun, Moon, Home, BookOpen, Trophy, User } from 'lucide-react'
+import { db } from '@/lib/firebase'
+import { collection, getDocs, query, orderBy, limit, addDoc, updateDoc, doc } from 'firebase/firestore'
 
 interface QuizQuestion {
   id: string;
@@ -41,13 +23,11 @@ interface QuizQuestion {
 interface User {
   id: string;
   name: string;
-  email: string;
   score: number;
 }
 
 export default function EnhancedBibleQuiz() {
   const [quizData, setQuizData] = useState<QuizQuestion[]>([])
-  const [shuffledQuizData, setShuffledQuizData] = useState<QuizQuestion[]>([])
   const [currentQuestion, setCurrentQuestion] = useState(0)
   const [selectedAnswer, setSelectedAnswer] = useState("")
   const [score, setScore] = useState(0)
@@ -57,15 +37,8 @@ export default function EnhancedBibleQuiz() {
   const [isDarkMode, setIsDarkMode] = useState(false)
   const [leaderboard, setLeaderboard] = useState<User[]>([])
   const [playerName, setPlayerName] = useState("")
-  const [playerEmail, setPlayerEmail] = useState("")
   const [currentScreen, setCurrentScreen] = useState("welcome")
-  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null)
-  const [password, setPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
   const [errorMessage, setErrorMessage] = useState("")
-  const [isEditingProfile, setIsEditingProfile] = useState(false)
-  const [newName, setNewName] = useState("")
-  const [newPassword, setNewPassword] = useState("")
   const [isClient, setIsClient] = useState(false)
 
   useEffect(() => {
@@ -73,6 +46,10 @@ export default function EnhancedBibleQuiz() {
     const storedDarkMode = localStorage.getItem('isDarkMode')
     if (storedDarkMode !== null) {
       setIsDarkMode(storedDarkMode === 'true')
+    }
+    const storedPlayerName = localStorage.getItem('playerName')
+    if (storedPlayerName) {
+      setPlayerName(storedPlayerName)
     }
   }, [])
 
@@ -82,70 +59,57 @@ export default function EnhancedBibleQuiz() {
     }
   }, [isDarkMode, isClient])
 
-  useEffect(() => {
-    if (!isClient) return
-
-    const fetchData = async () => {
+  const fetchQuizData = useCallback(async () => {
+    try {
       const questionsSnapshot = await getDocs(collection(db, 'questions'))
       const fetchedQuestions = questionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as QuizQuestion))
       setQuizData(fetchedQuestions)
-      shuffleQuestions(fetchedQuestions)
+    } catch (error) {
+      console.error('Error fetching quiz data:', error)
+      setErrorMessage('Failed to load quiz questions. Please try again.')
+    }
+  }, [])
 
+  const fetchLeaderboard = useCallback(async () => {
+    try {
       const leaderboardQuery = query(collection(db, 'users'), orderBy('score', 'desc'), limit(10))
       const leaderboardSnapshot = await getDocs(leaderboardQuery)
       const fetchedLeaderboard = leaderboardSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User))
       setLeaderboard(fetchedLeaderboard)
+    } catch (error) {
+      console.error('Error fetching leaderboard:', error)
+      setErrorMessage('Failed to load leaderboard. Please try again.')
     }
+  }, [])
 
-    fetchData()
-
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      setCurrentUser(user)
-      if (user) {
-        fetchUserData(user.uid)
-      }
-    })
-
-    return () => unsubscribe()
-  }, [isClient])
-
-  const shuffleQuestions = (questions: QuizQuestion[]) => {
-    const shuffled = [...questions]
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  useEffect(() => {
+    if (isClient) {
+      fetchQuizData()
+      fetchLeaderboard()
     }
-    setShuffledQuizData(shuffled)
-  }
+  }, [isClient, fetchQuizData, fetchLeaderboard])
 
-  const fetchUserData = async (userId: string) => {
-    const userDoc = await getDoc(doc(db, 'users', userId))
-    if (userDoc.exists()) {
-      const userData = userDoc.data() as User
-      setPlayerName(userData.name)
-      setPlayerEmail(userData.email)
-      setScore(userData.score)
-    }
+  const savePlayerName = (name: string) => {
+    setPlayerName(name)
+    localStorage.setItem('playerName', name)
   }
 
   const handleSubmit = useCallback(() => {
-    const correctAnswer = shuffledQuizData[currentQuestion].correctAnswer
+    const correctAnswer = quizData[currentQuestion].correctAnswer
     if (selectedAnswer === `${correctAnswer.book} ${correctAnswer.chapter}:${correctAnswer.verse}`) {
       setScore(prevScore => prevScore + 1)
     }
     setIsAnswered(true)
-  }, [shuffledQuizData, currentQuestion, selectedAnswer])
+  }, [quizData, currentQuestion, selectedAnswer])
 
   useEffect(() => {
-    if (!isClient) return
-
     if (timeLeft > 0 && !isAnswered && currentScreen === "quiz") {
       const timer = setTimeout(() => setTimeLeft(prevTime => prevTime - 1), 1000)
       return () => clearTimeout(timer)
     } else if (timeLeft === 0 && !isAnswered && currentScreen === "quiz") {
       handleSubmit()
     }
-  }, [timeLeft, isAnswered, currentScreen, handleSubmit, isClient])
+  }, [timeLeft, isAnswered, currentScreen, handleSubmit])
 
   const handleAnswerSelect = (answer: string) => {
     setSelectedAnswer(answer)
@@ -155,7 +119,7 @@ export default function EnhancedBibleQuiz() {
     setSelectedAnswer("")
     setIsAnswered(false)
     setTimeLeft(60)
-    if (currentQuestion < shuffledQuizData.length - 1) {
+    if (currentQuestion < quizData.length - 1) {
       setCurrentQuestion(currentQuestion + 1)
     } else {
       setShowResult(true)
@@ -164,7 +128,6 @@ export default function EnhancedBibleQuiz() {
   }
 
   const resetQuiz = () => {
-    shuffleQuestions(quizData)
     setCurrentQuestion(0)
     setSelectedAnswer("")
     setScore(0)
@@ -175,16 +138,15 @@ export default function EnhancedBibleQuiz() {
   }
 
   const updateLeaderboard = async () => {
-    if (!currentUser) return
-
     try {
-      await updateDoc(doc(db, 'users', currentUser.uid), {
-        score: score
-      })
-
-      const newLeaderboard = [...leaderboard, { id: currentUser.uid, name: playerName, email: playerEmail, score }]
+      const userRef = doc(db, 'users', playerName)
+      await updateDoc(userRef, { score: score })
+      
+      const newLeaderboard = [...leaderboard, { id: playerName, name: playerName, score }]
       newLeaderboard.sort((a, b) => b.score - a.score)
       setLeaderboard(newLeaderboard.slice(0, 10))
+      
+      fetchLeaderboard()
     } catch (error) {
       console.error('Error updating leaderboard:', error)
       setErrorMessage('Failed to update leaderboard. Please try again.')
@@ -192,125 +154,19 @@ export default function EnhancedBibleQuiz() {
   }
 
   const shareResults = () => {
-    if (isClient && navigator.share) {
+    if (navigator.share) {
       navigator.share({
         title: 'Bible Quiz Results',
-        text: `I scored ${score} out of ${shuffledQuizData.length} in the Bible Quiz! Can you beat my score?`,
+        text: `I scored ${score} out of ${quizData.length} in the Bible Quiz! Can you beat my score?`,
         url: window.location.href,
       })
     } else {
-      alert(`I scored ${score} out of ${shuffledQuizData.length} in the Bible Quiz! Can you beat my score?`)
+      alert(`I scored ${score} out of ${quizData.length} in the Bible Quiz! Can you beat my score?`)
     }
   }
 
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode)
-  }
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setErrorMessage('')
-    try {
-      await signInWithEmailAndPassword(auth, playerEmail, password)
-      setCurrentScreen("quiz")
-    } catch (error) {
-      console.error('Error during login:', error)
-      setErrorMessage('Invalid email or password. Please try again.')
-    }
-  }
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setErrorMessage('')
-    if (password !== confirmPassword) {
-      setErrorMessage('Passwords do not match.')
-      return
-    }
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, playerEmail, password)
-      await setDoc(doc(db, 'users', userCredential.user.uid), {
-        name: playerName,
-        email: playerEmail,
-        score: 0
-      })
-      setCurrentScreen("quiz")
-    } catch (error) {
-      if (error instanceof FirebaseError) {
-        if (error.code === 'auth/email-already-in-use') {
-          setErrorMessage('This email is already in use. Please try a different email or log in.')
-        } else {
-          setErrorMessage(`Registration failed: ${error.message}`)
-        }
-      } else {
-        console.error('Error during registration:', error)
-        setErrorMessage('An unexpected error occurred during registration. Please try again.')
-      }
-    }
-  }
-
-  const handleForgotPassword = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setErrorMessage('')
-    try {
-      await sendPasswordResetEmail(auth, playerEmail)
-      setErrorMessage('Password reset email sent. Please check your inbox.')
-    } catch (error) {
-      console.error('Error sending password reset email:', error)
-      setErrorMessage('Failed to send password reset email. Please try again.')
-    }
-  }
-
-  const handleLogout = async () => {
-    try {
-      await signOut(auth)
-      setCurrentUser(null)
-      setPlayerName("")
-      setPlayerEmail("")
-      setScore(0)
-      setCurrentScreen("welcome")
-    } catch (error) {
-      console.error('Error signing out:', error)
-      setErrorMessage('Failed to log out. Please try again.')
-    }
-  }
-
-  const handleUpdateProfile = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setErrorMessage('')
-    if (!currentUser) return
-
-    try {
-      if (newName) {
-        await updateDoc(doc(db, 'users', currentUser.uid), { name: newName })
-        setPlayerName(newName)
-      }
-      if (newPassword) {
-        await updatePassword(currentUser, newPassword)
-      }
-      setIsEditingProfile(false)
-      setNewName('')
-      setNewPassword('')
-      setErrorMessage('Profile updated successfully.')
-    } catch (error) {
-      console.error('Error updating profile:', error)
-      setErrorMessage('Failed to update profile. Please try again.')
-    }
-  }
-
-  const handleSocialLogin = async (provider: GoogleAuthProvider | OAuthProvider) => {
-    try {
-      const result = await signInWithPopup(auth, provider)
-      const user = result.user
-      await setDoc(doc(db, 'users', user.uid), {
-        name: user.displayName,
-        email: user.email,
-        score: 0
-      }, { merge: true })
-      setCurrentScreen("quiz")
-    } catch (error) {
-      console.error('Error during social login:', error)
-      setErrorMessage('Failed to login. Please try again.')
-    }
   }
 
   if (!isClient) {
@@ -340,27 +196,11 @@ export default function EnhancedBibleQuiz() {
           >
             {isDarkMode ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
           </Button>
-          {currentUser && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="h-8 w-8 rounded-full">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src="/placeholder.svg" alt="Profile" />
-                    <AvatarFallback>{playerName ? playerName[0].toUpperCase() : 'U'}</AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setIsEditingProfile(true)}>
-                  <User className="mr-2 h-4 w-4" />
-                  <span>Profile</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleLogout}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Logout</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+          {playerName && (
+            <Avatar className="h-8 w-8">
+              <AvatarImage src="/placeholder.svg" alt="Profile" />
+              <AvatarFallback>{playerName[0].toUpperCase()}</AvatarFallback>
+            </Avatar>
           )}
         </div>
       </header>
@@ -379,7 +219,7 @@ export default function EnhancedBibleQuiz() {
                 <Card className="bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900 dark:to-pink-900">
                   <CardContent className="p-6">
                     <h2 className="text-2xl font-bold mb-4 text-purple-800 dark:text-purple-200">Welcome to Bible Quiz</h2>
-                    {currentUser ? (
+                    {playerName ? (
                       <div className="space-y-4">
                         <p className="text-purple-700 dark:text-purple-300">Welcome back, {playerName}!</p>
                         <Button 
@@ -390,213 +230,52 @@ export default function EnhancedBibleQuiz() {
                         </Button>
                       </div>
                     ) : (
-                      <div className="space-y-4">
-                        <form onSubmit={handleLogin} className="space-y-4">
-                          <div className="relative">
-                            <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                            <Input 
-                              type="email"
-                              placeholder="Email"
-                              value={playerEmail} 
-                              onChange={(e) => setPlayerEmail(e.target.value)}
-                              className="pl-10 bg-white/50 dark:bg-gray-800/50 border-purple-300 dark:border-purple-700"
-                            />
-                          </div>
-                          <div className="relative">
-                            <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                            <Input 
-                              type="password"
-                              placeholder="Password"
-                              value={password} 
-                              onChange={(e) => setPassword(e.target.value)}
-                              className="pl-10 bg-white/50 dark:bg-gray-800/50 border-purple-300 dark:border-purple-700"
-                            />
-                          </div>
-                          {errorMessage && <p className="text-red-500 text-sm">{errorMessage}</p>}
-                          <Button 
-                            type="submit"
-                            className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-                          >
-                            Login
-                          </Button>
-                        </form>
-                        <div className="flex justify-center space-x-4">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => handleSocialLogin(new GoogleAuthProvider())}
-                            className="rounded-full"
-                          >
-                            <Google className="h-5 w-5" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => handleSocialLogin(new OAuthProvider('apple.com'))}
-                            className="rounded-full"
-                          >
-                            <Apple className="h-5 w-5" />
-                          </Button>
+                      <form onSubmit={(e) => {
+                        e.preventDefault()
+                        if (playerName.trim()) {
+                          savePlayerName(playerName.trim())
+                          setCurrentScreen("quiz")
+                        }
+                      }} className="space-y-4">
+                        <div className="relative">
+                          <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                          <Input 
+                            placeholder="Enter your name"
+                            value={playerName} 
+                            onChange={(e) => setPlayerName(e.target.value)}
+                            className="pl-10 bg-white/50 dark:bg-gray-800/50 border-purple-300 dark:border-purple-700"
+                          />
                         </div>
-                        <div className="flex justify-between">
-                          <Button variant="link" onClick={() => setCurrentScreen("register")}>
-                            Create Account
-                          </Button>
-                          <Button variant="link" onClick={() => setCurrentScreen("forgotPassword")}>
-                            Forgot Password?
-                          </Button>
-                        </div>
-                      </div>
+                        <Button 
+                          type="submit"
+                          className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                          disabled={!playerName.trim()}
+                        >
+                          Start Quiz
+                        </Button>
+                      </form>
                     )}
                   </CardContent>
                 </Card>
               )}
 
-              {currentScreen === "register" && (
-                <Card className="bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900 dark:to-pink-900">
-                  <CardContent className="p-6">
-                    <h2 className="text-2xl font-bold mb-4 text-purple-800 dark:text-purple-200">Create Account</h2>
-                    <form onSubmit={handleRegister} className="space-y-4">
-                      <div className="relative">
-                        <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                        <Input 
-                          placeholder="Name"
-                          value={playerName} 
-                          onChange={(e) => setPlayerName(e.target.value)}
-                          className="pl-10 bg-white/50 dark:bg-gray-800/50 border-purple-300 dark:border-purple-700"
-                        />
-                      </div>
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                        <Input 
-                          type="email"
-                          placeholder="Email"
-                          value={playerEmail} 
-                          onChange={(e) => setPlayerEmail(e.target.value)}
-                          className="pl-10 bg-white/50 dark:bg-gray-800/50 border-purple-300 dark:border-purple-700"
-                        />
-                      </div>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                        <Input 
-                          type="password"
-                          placeholder="Password"
-                          value={password} 
-                          onChange={(e) => setPassword(e.target.value)}
-                          className="pl-10 bg-white/50 dark:bg-gray-800/50 border-purple-300 dark:border-purple-700"
-                        />
-                      </div>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                        <Input 
-                          type="password"
-                          placeholder="Confirm Password"
-                          value={confirmPassword} 
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          className="pl-10 bg-white/50 dark:bg-gray-800/50 border-purple-300 dark:border-purple-700"
-                        />
-                      </div>
-                      {errorMessage && <p className="text-red-500 text-sm">{errorMessage}</p>}
-                      <Button 
-                        type="submit"
-                        className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-                      >
-                        Register
-                      </Button>
-                    </form>
-                    <Button variant="link" onClick={() => setCurrentScreen("welcome")} className="mt-4">
-                      Back to Login
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
-
-              {currentScreen === "forgotPassword" && (
-                <Card className="bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900 dark:to-pink-900">
-                  <CardContent className="p-6">
-                    <h2 className="text-2xl font-bold mb-4 text-purple-800 dark:text-purple-200">Forgot Password</h2>
-                    <form onSubmit={handleForgotPassword} className="space-y-4">
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                        <Input 
-                          type="email"
-                          placeholder="Email"
-                          value={playerEmail} 
-                          onChange={(e) => setPlayerEmail(e.target.value)}
-                          className="pl-10 bg-white/50 dark:bg-gray-800/50 border-purple-300 dark:border-purple-700"
-                        />
-                      </div>
-                      {errorMessage && <p className="text-red-500 text-sm">{errorMessage}</p>}
-                      <Button 
-                        type="submit"
-                        className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-                      >
-                        Reset Password
-                      </Button>
-                    </form>
-                    <Button variant="link" onClick={() => setCurrentScreen("welcome")} className="mt-4">
-                      Back to Login
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
-
-              {isEditingProfile && (
-                <Card className="bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900 dark:to-pink-900">
-                  <CardContent className="p-6">
-                    <h2 className="text-2xl font-bold mb-4 text-purple-800 dark:text-purple-200">Edit Profile</h2>
-                    <form onSubmit={handleUpdateProfile} className="space-y-4">
-                      <div className="relative">
-                        <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                        <Input 
-                          placeholder="New Name"
-                          value={newName} 
-                          onChange={(e) => setNewName(e.target.value)}
-                          className="pl-10 bg-white/50 dark:bg-gray-800/50 border-purple-300 dark:border-purple-700"
-                        />
-                      </div>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                        <Input 
-                          type="password"
-                          placeholder="New Password"
-                          value={newPassword} 
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          className="pl-10 bg-white/50 dark:bg-gray-800/50 border-purple-300 dark:border-purple-700"
-                        />
-                      </div>
-                      {errorMessage && <p className="text-red-500 text-sm">{errorMessage}</p>}
-                      <Button 
-                        type="submit"
-                        className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-                      >
-                        Update Profile
-                      </Button>
-                    </form>
-                    <Button variant="link" onClick={() => setIsEditingProfile(false)} className="mt-4">
-                      Cancel
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
-
-              {currentScreen === "quiz" && shuffledQuizData.length > 0 && (
+              {currentScreen === "quiz" && quizData.length > 0 && (
                 <Card className="bg-white dark:bg-gray-800 shadow-lg">
                   <CardContent className="p-6">
                     {!showResult ? (
                       <>
                         <div className="flex justify-between items-center mb-4">
                           <h2 className="text-xl font-semibold text-purple-800 dark:text-purple-200">
-                            Question {currentQuestion + 1} of {shuffledQuizData.length}
+                            Question {currentQuestion + 1} of {quizData.length}
                           </h2>
                           <div className="flex items-center space-x-2 text-pink-600 dark:text-pink-400">
                             <Clock className="w-5 h-5" />
                             <span>{timeLeft}s</span>
                           </div>
                         </div>
-                        <p className="mb-6 text-lg text-purple-700 dark:text-purple-300">{shuffledQuizData[currentQuestion].passage}</p>
+                        <p className="mb-6 text-lg text-purple-700 dark:text-purple-300">{quizData[currentQuestion].passage}</p>
                         <RadioGroup value={selectedAnswer} onValueChange={handleAnswerSelect} className="space-y-2">
-                          {shuffledQuizData[currentQuestion].options.map((option, index) => (
+                          {quizData[currentQuestion].options.map((option, index) => (
                             <div key={index} className="flex items-center space-x-2">
                               <RadioGroupItem
                                 value={`${option.book} ${option.chapter}:${option.verse}`}
@@ -612,16 +291,16 @@ export default function EnhancedBibleQuiz() {
                         </RadioGroup>
                         {isAnswered && (
                           <div className="mt-4">
-                            <p className={`font-semibold ${selectedAnswer === `${shuffledQuizData[currentQuestion].correctAnswer.book} ${shuffledQuizData[currentQuestion].correctAnswer.chapter}:${shuffledQuizData[currentQuestion].correctAnswer.verse}` ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                              {selectedAnswer === `${shuffledQuizData[currentQuestion].correctAnswer.book} ${shuffledQuizData[currentQuestion].correctAnswer.chapter}:${shuffledQuizData[currentQuestion].correctAnswer.verse}` ? 'Correct!' : `Incorrect. The correct answer is ${shuffledQuizData[currentQuestion].correctAnswer.book} ${shuffledQuizData[currentQuestion].correctAnswer.chapter}:${shuffledQuizData[currentQuestion].correctAnswer.verse}`}
+                            <p className={`font-semibold ${selectedAnswer === `${quizData[currentQuestion].correctAnswer.book} ${quizData[currentQuestion].correctAnswer.chapter}:${quizData[currentQuestion].correctAnswer.verse}` ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                              {selectedAnswer === `${quizData[currentQuestion].correctAnswer.book} ${quizData[currentQuestion].correctAnswer.chapter}:${quizData[currentQuestion].correctAnswer.verse}` ? 'Correct!' : `Incorrect. The correct answer is ${quizData[currentQuestion].correctAnswer.book} ${quizData[currentQuestion].correctAnswer.chapter}:${quizData[currentQuestion].correctAnswer.verse}`}
                             </p>
-                            <p className="mt-2 text-purple-700 dark:text-purple-300">{shuffledQuizData[currentQuestion].explanation}</p>
+                            <p className="mt-2 text-purple-700 dark:text-purple-300">{quizData[currentQuestion].explanation}</p>
                           </div>
                         )}
                         <div className="mt-6 flex justify-center">
                           {isAnswered ? (
                             <Button onClick={handleNextQuestion} className="bg-purple-600 text-white hover:bg-purple-700">
-                              {currentQuestion < shuffledQuizData.length - 1 ? 'Next Question' : 'Finish Quiz'}
+                              {currentQuestion < quizData.length - 1 ? 'Next Question' : 'Finish Quiz'}
                             </Button>
                           ) : (
                             <Button onClick={handleSubmit} disabled={!selectedAnswer} className="bg-purple-600 text-white hover:bg-purple-700">
@@ -633,7 +312,7 @@ export default function EnhancedBibleQuiz() {
                     ) : (
                       <div className="text-center">
                         <h2 className="text-2xl font-bold mb-4 text-purple-800 dark:text-purple-200">Quiz Completed!</h2>
-                        <p className="text-xl mb-4 text-purple-700 dark:text-purple-300">Your score: {score} out of {shuffledQuizData.length}</p>
+                        <p className="text-xl mb-4 text-purple-700 dark:text-purple-300">Your score: {score} out of {quizData.length}</p>
                         <div className="flex justify-center gap-4">
                           <Button onClick={shareResults} className="bg-pink-600 text-white hover:bg-pink-700">
                             <Share2 className="w-4 h-4 mr-2" />
@@ -677,22 +356,54 @@ export default function EnhancedBibleQuiz() {
         </div>
       </main>
 
-      <footer className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-purple-200 dark:border-purple-800 py-2">
-        <nav className="max-w-2xl mx-auto flex justify-around">
-          <Button variant="ghost" onClick={() => setCurrentScreen("welcome")} className="flex flex-col items-center">
-            <Home className="h-6 w-6" />
-            <span className="text-xs mt-1">Home</span>
-          </Button>
-          <Button variant="ghost" onClick={() => setCurrentScreen("quiz")} className="flex flex-col items-center">
-            <BookOpen className="h-6 w-6" />
-            <span className="text-xs mt-1">Quiz</span>
-          </Button>
-          <Button variant="ghost" onClick={() => setCurrentScreen("leaderboard")} className="flex flex-col items-center">
-            <Trophy className="h-6 w-6" />
-            <span className="text-xs mt-1">Leaderboard</span>
-          </Button>
-        </nav>
-      </footer>
+      {playerName && (
+        <footer className={`fixed bottom-0 left-0 right-0 ${
+          isDarkMode ? 'bg-gray-800' : 'bg-white'
+        } border-t border-purple-200 dark:border-purple-800`}>
+          <nav className="max-w-2xl mx-auto px-6 py-4">
+            <div className="flex justify-around items-center">
+              <Button
+                variant="ghost"
+                onClick={() => setCurrentScreen("welcome")}
+                className={`flex flex-col items-center gap-1 h-auto px-6 ${
+                  currentScreen === "welcome" 
+                    ? "text-purple-600 dark:text-purple-400" 
+                    : "text-gray-600 dark:text-gray-400"
+                }`}
+              >
+                <Home className="h-7 w-7" />
+                <span className="text-xs font-medium">Home</span>
+              </Button>
+
+              <Button
+                variant="ghost"
+                onClick={() => setCurrentScreen("quiz")}
+                className={`flex flex-col items-center gap-1 h-auto px-6 ${
+                  currentScreen === "quiz" 
+                    ? "text-purple-600 dark:text-purple-400" 
+                    : "text-gray-600 dark:text-gray-400"
+                }`}
+              >
+                <BookOpen className="h-7 w-7" />
+                <span className="text-xs font-medium">Quiz</span>
+              </Button>
+
+              <Button
+                variant="ghost"
+                onClick={() => setCurrentScreen("leaderboard")}
+                className={`flex flex-col items-center gap-1 h-auto px-6 ${
+                  currentScreen === "leaderboard" 
+                    ? "text-purple-600 dark:text-purple-400" 
+                    : "text-gray-600 dark:text-gray-400"
+                }`}
+              >
+                <Trophy className="h-7 w-7" />
+                <span className="text-xs font-medium">Ranks</span>
+              </Button>
+            </div>
+          </nav>
+        </footer>
+      )}
     </div>
   )
 }
