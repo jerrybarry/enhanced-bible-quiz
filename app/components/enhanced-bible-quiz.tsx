@@ -320,24 +320,25 @@ export default function EnhancedBibleQuiz() {
                     ) : (
                       <form onSubmit={(e) => {
                         e.preventDefault()
-                        if (playerName.trim()) {
-                          savePlayerName(playerName.trim())
+                        const formData = new FormData(e.currentTarget)
+                        const name = formData.get('playerName') as string
+                        if (name.trim()) {
+                          savePlayerName(name.trim())
                           setCurrentScreen("category")
                         }
                       }} className="space-y-4">
                         <div className="relative">
                           <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                           <Input 
+                            name="playerName"
                             placeholder="Enter your name"
-                            value={playerName} 
-                            onChange={(e) => setPlayerName(e.target.value)}
+                            defaultValue={playerName}
                             className="pl-10 bg-white/50 dark:bg-gray-800/50 border-purple-300 dark:border-purple-700"
                           />
                         </div>
                         <Button 
                           type="submit"
                           className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-                          disabled={!playerName.trim()}
                         >
                           Start Quiz
                         </Button>
